@@ -48,16 +48,16 @@ io.on('connection', function (socket) {
     });
 
     socket.on("placeCard", function(data) {
-        if(socket.room && socket.room.isTurnHolder(socket) && data.card && data.pileHolderId) {
-            socket.room.placeCard(data.card, data.pileHolderId);
+        if(socket.room && socket.room.isTurnHolder(socket) && data.card && data.pileOwnerId) {
+            socket.room.placeCard(data.card, data.pileOwnerId);
         }
-    })
+    });
 
     socket.on("endTurn", function() {
         if(socket.room && socket.room.isTurnHolder(socket)) {
             socket.room.endTurn();
         }
-    })
+    });
 
     socket.on('readyForStart', function () {
         if (socket.room) {
@@ -75,10 +75,17 @@ io.on('connection', function (socket) {
 
 function resetRoom(roomId) {
     var room = rooms[roomId];
-    rooms[roomId] = new Room(roomId);
+    var newRoom = new Room(roomId)
+    rooms[roomId] = newRoom;
 
     if (room) {
         room.emit("endGame", room.rankList());
+        var playerId;
+        for(playerId in room.playerData) {
+            var socket = io.sockets.sockets[playerId];
+            newRoom.createPlayerData(socket, room.playerData[playerId].playerName);
+            socket.room = newRoom;
+        }
     }
     delete room;
 }
@@ -147,15 +154,15 @@ global.cardsMatch = function(card1, card2) {
     if (card1 > 53 || card2 > 53) {
         return false;
     }
-    var card1mod = card1 % 13;
-    var card2mod = card2 % 13;
+    var card1mod = card1 % 4;
+    var card2mod = card2 % 4;
     // cards of the same symbol or same number or
     return card1mod === card2mod || Math.floor(card1 / 4) === Math.floor(card2 / 4) || card1 >= 52 || card2 >= 52;
 }
 
 global.isCardBlack = function(card) {
-    var type = Math.floor(card / 4);
-    return type == 0 || type == 3
+    var type = card % 13;
+    return type >= 2;
 }
 
 const loop = gameloop.setGameLoop(function (delta) {

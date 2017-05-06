@@ -1,0 +1,74 @@
+html,
+body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+#container {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    visibility: hidden
+}
+
+#login {
+    display: block;
+    margin: 0 auto;
+    padding: 80px 50px;
+    max-width: 300px;
+    text-align: center;
+    visibility: visible;
+}
+
+#login>* {
+    box-sizing: border-box;
+    -moz-box-sizing: border-box;
+    margin-bottom: 20px;
+    width: 100%;
+}
+
+#game {
+    width: auto;
+    height: auto;
+    margin: 0 auto;
+    text-align: center;
+}
+
+#playerBox {
+    display: inline-block;
+    vertical-align: top;
+    width: 15%;
+    min-width: 175px;
+    max-width: 300px;
+    height: 100vh;
+    max-height: 800px;
+    background: blue;
+}
+
+#player {
+    vertical-align: top;
+}
+
+#canvas {
+    display: inline-block;
+    /*    background: red;*/
+    width: 125vh;
+    height: 100vh;
+    max-width: 1000px;
+    max-height: 800px;
+    margin: 0px;
+    padding: 0px;
+}
+
+#chat {
+    display: inline-block;
+    vertical-align: top;
+    width: 15%;
+    min-width: 175px;
+    max-width: 300px;
+    height: 100vh;
+    max-height: 800px;
+    background: blue;
+}

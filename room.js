@@ -11,6 +11,7 @@ function Room(roomId) {
     -> cards
         --> (number)
     -> pile
+        //--> owner (string)
         -->
             --> player (string)
             --> card (number)
@@ -60,13 +61,15 @@ Room.prototype.playingPlayers = function () {
 Room.prototype.playerInfo = function (player) {
     if (player) {
         return {
+            id: player.id,
             playerName: player.playerName,
             readyForStart: player.readyForStart
-        }
+        };
     }
-    var playerInfo = [];
+    var playerInfo = {};
+    var playerId;
     for (playerId in this.playerData) {
-        playerInfo.push(this.playerInfo(this.playerData[playerId]));
+        playerInfo[playerId] = this.playerInfo(this.playerData[playerId]);
     }
     return playerInfo;
 };
@@ -138,8 +141,8 @@ Room.prototype.endGame = function () {
 Room.prototype.rankList = function () {
     var rankList = [],
         playerId, i;
-    for (playerId in winners) {
-        rankList.push(playerId);
+    for (i = 0; i < winners.length; i++) {
+        rankList.push(winners[i]);
     }
     var playingPlayers = this.playingPlayers();
     // Reverse, as players that have a turn later in the game have a disadvantage, so should end up higher in the rank list
@@ -199,18 +202,21 @@ Room.prototype.accelerateTurn = function () {
     }
 }
 
-Room.prototype.placeCard = function(card, pileHolderId) {
+Room.prototype.placeCard = function (card, pileOwnerId) {
     if (!this.turnHolder.cards.indexOf(card) === -1) {
         return;
     }
     var pile = this.playerData[pilePlayerId].pile;
-    if (pile.length >= PILE_SIZE) {
-        return;
-    }
     var parentCard = (pile.length === 0) ? this.baseCard : pile[pile.length - 1].card;
-    if (!cardsMatch(parentCard, card)) {
+    if (pile.length >= PILE_SIZE || !cardsMatch(parentCard, card)) {
+        var socket = this.sockets()[this.turnHolder.id];
+        socket.emit("placeCardRejected", {
+            card: card,
+            pileOwnerId: pileOwnerId
+        });
         return;
     }
+
     var turnAction = {
         player: this.turnHolder.id,
         card: card
@@ -219,7 +225,7 @@ Room.prototype.placeCard = function(card, pileHolderId) {
     this.turnActions = turnAction;
     this.emit("placeCard", {
         card: card,
-        pileHolderId: pileHolderId
+        pileOwnerId: pileOwnerId
     });
     if (pile.length >= PILE_SIZE) {
         if (isCardBlack(card)) {
@@ -231,14 +237,15 @@ Room.prototype.placeCard = function(card, pileHolderId) {
     this.accelerateTurn();
 }
 
-Room.prototype.canPlaceCard = function(player) {
-    var pileHolderId;
-    for (pileHolderId in this.playerData) {
-        var pile = this.playerData[pileHolder].pile;
-        if (pile.length == 0) {
+Room.prototype.canPlaceCard = function (player) {
+    var checkedBaseCard = false;
+    var pileOwnerId;
+    for (pileOwnerId in this.playerData) {
+        var pile = this.playerData[pileOwner].pile;
+        if (checkedBaseCard && pile.length == 0) {
             continue;
         }
-        var topCard = pile[pile.length - 1].card;
+        var topCard = pile.length == 0 ? this.baseCard : pile[pile.length - 1].card;
         var handCard;
         for (handCard in player.cards) {
             if (cardsMatch(topCard, handCard)) {
@@ -248,10 +255,13 @@ Room.prototype.canPlaceCard = function(player) {
     }
 }
 
-Room.prototype.canDrawCard = function(player) {
-    return player.cards.length < MAX_CARDS_PER_PLAYER;
+Room.prototype.canCardBePlaced = function (card, parentCard, pileIndex) {
+    return cardsMatch(parentCard, card) && !(pileIndex == PILE_SIZE - 1 && card >= 52);
 }
 
+Room.prototype.canDrawCard = function (player) {
+    return player.cards.length < MAX_CARDS_PER_PLAYER;
+}
 
 Room.prototype.startGame = function () {
     console.log("starting game in room " + this.id);
@@ -273,7 +283,8 @@ Room.prototype.startGame = function () {
     this.emit('startGame', {
         playerOrder: this.playerOrder,
         baseCard: this.baseCard,
-        cardsPerPlayer: START_CARDS_PER_PLAYER
+        cardsPerPlayer: START_CARDS_PER_PLAYER,
+        pileSize: PILE_SIZE
     });
 
     var sockets = this.sockets();
@@ -285,22 +296,17 @@ Room.prototype.startGame = function () {
             player.cards[i] = this.randomCard();
         }
         player.pile = [];
+//        player.pile.owner = player.id;
         sockets[playerId].emit('initialCards', cards);
     }
 };
 
 Room.prototype.isTurnHolder = function (socket) {
-    return socket.id === this.turnHolder.id;
+    return this.turnHolder && socket.id === this.turnHolder.id;
 }
 
 Room.prototype.joinPlayer = function (socket, playerName) {
-    var newPlayerData = {
-        id: socket.id,
-        playerName: playerName,
-        readyForStart: false,
-        alive: true,
-    };
-    this.playerData[socket.id] = newPlayerData;
+    var newPlayerData = this.createPlayerData(socket, playerName);
     socket.join(this.id);
     socket.room = this;
     socket.emit("roomJoin", {
@@ -312,12 +318,22 @@ Room.prototype.joinPlayer = function (socket, playerName) {
     console.log(socket.id + " joined room '" + this.id + "' as '" + playerName + "'");
 };
 
+Room.prototype.createPlayerData = function (socket, playerName) {
+    var newPlayerData = {
+        id: socket.id,
+        playerName: playerName,
+        readyForStart: false,
+        alive: true,
+    };
+    this.playerData[socket.id] = newPlayerData;
+    return newPlayerData;
+}
+
 Room.prototype.leavePlayer = function (socket) {
     if (!this.playing) {
         delete this.playerData[socket.id];
         this.emit("playerLeave", [socket.id]);
     } else {
-        // TODO Leave when playing
         this.playerDeath(this.playerData[socket.id]);
     }
     socket.leave(this.id);
@@ -340,7 +356,7 @@ Room.prototype.playerReadyForStart = function (socket) {
     this.startGame();
 };
 
-Room.prototype.isPlaying = function(player) {
+Room.prototype.isPlaying = function (player) {
     this.turnHolder.alive && this.winners.indexOf(this.turnHolder.id) === -1 && this.losers.indexOf(this.turnHolder.id) === -1
 }
 

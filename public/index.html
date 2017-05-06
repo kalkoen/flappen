@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <link rel="stylesheet" type="text/css" href="style.css">
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/dragula/3.7.2/dragula.css">
+</head>
+
+<body>
+    <div id="container">
+        <div id="game">
+            <div id="canvas"></div>
+            <div id="chat">
+            </div>
+        </div>
+    </div>
+    <div id="login">
+        <h1>Flappen</h1>
+        <input id="name" type="text" name="Player Name" placeholder="Player Name">
+        <button id="join" onclick="requestRoom()">Join!</button>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/2.6.2/phaser.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="game.js"></script>
+</body>
+
+</html>
