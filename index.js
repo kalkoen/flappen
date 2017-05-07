@@ -94,11 +94,14 @@ function findPlayableRoom(roomId) {
     if (roomId) {
         roomId = roomId.substring(0, ROOM_NAME_LENGTH);
         var room = rooms[roomId];
-        if (room && room.isJoinable) {
-            return room;
+        if (room) {
+            if(room.isJoinable()) {
+                return room;
+            } else {
+                return createNewRoom();
+            }
         } else {
-            var room = new Room();
-            return new Room();
+            return createNewRoom(roomId);
         }
     } else {
         var roomId, bestRoom;

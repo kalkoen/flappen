@@ -66,20 +66,20 @@ Room.prototype.playerInfo = function (player) {
             readyForStart: player.readyForStart
         };
     }
-    var playerInfo = {};
+    var playerInfo = [];
     var playerId;
     for (playerId in this.playerData) {
-        playerInfo[playerId] = this.playerInfo(this.playerData[playerId]);
+        playerInfo.push(this.playerInfo(this.playerData[playerId]));
     }
     return playerInfo;
 };
 
 Room.prototype.isJoinable = function () {
-    return !isFull() && !rooms[roomId].playing;
+    return !this.isFull() && !rooms[roomId].playing;
 };
 
 Room.prototype.isFull = function () {
-    return playersInRoom(roomId) >= MAX_PLAYERS;
+    return this.amountSockets() >= MAX_PLAYERS;
 };
 
 Room.prototype.randomCard = function () {

@@ -12,18 +12,19 @@ var room = {};
 var graphics;
 
 socket.on('playerJoin', function (players) {
-    var playerId;
-    for (playerId in players) {
-        var player = players[playerId];
-        room.playerInfo[playerId] = player;
+    var i;
+    for (i = 0; i < players.length; i++) {
+        var player = players[i];
+        room.playerInfo[player.id] = player;
+        createPlayerInList(player, amountPlayers() - 1);
         console.log(player.playerName + ' joined, ' + amountPlayers() + ' players.');
-        createPlayerInList(player, amountPlayers()-1);
     }
 });
 
 socket.on('playerLeave', function (players) {
-    var playerId;
-    for (playerId in players) {
+    var i;
+    for (i = 0; i < players.length; i++) {
+        var playerId = players[i];
         var player = room.playerInfo[playerId];
         removePlayerInList(player);
         delete room.playerInfo[playerId];
@@ -34,6 +35,15 @@ socket.on('playerLeave', function (players) {
 
 socket.on('roomJoin', function (roomData) {
     room = roomData;
+    console.log(room.playerInfo);
+    var mappedPlayerInfo = {};
+    var i;
+    for (i = 0; i < room.playerInfo.length; i++) {
+        var player = room.playerInfo[i];
+        mappedPlayerInfo[player.id] = player;
+    }
+    room.playerInfo = mappedPlayerInfo;
+
     room.playing = false;
 
     location.hash = "#" + room.id;
