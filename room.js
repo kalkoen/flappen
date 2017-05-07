@@ -1,3 +1,4 @@
+const shuffleArray = require("knuth-shuffle").knuthShuffle;
 function Room(roomId) {
     this.id = roomId;
     this.playing = false;
@@ -35,15 +36,12 @@ Room.prototype.emit = function (event, data) {
 }
 
 Room.prototype.sockets = function () {
-    return io.sockets.in(this.id).clients;
+    return io.sockets.in(this.id).sockets;
 };
 
 Room.prototype.amountSockets = function () {
-    var playerId, i = 0;
-    for (playerId in this.sockets()) {
-        i++;
-    }
-    return i;
+    console.log(io.sockets.in(this.id).server.engine.clientsCount);
+    return io.sockets.in(this.id).server.engine.clientsCount;
 };
 
 Room.prototype.playingPlayers = function () {
@@ -75,13 +73,12 @@ Room.prototype.playerInfo = function (player) {
 };
 
 Room.prototype.isJoinable = function () {
-    console.log(this.amountSockets());
 
     return !this.isFull() && !this.playing;
 };
 
 Room.prototype.isFull = function () {
-    console.log(this.amountSockets());
+
     return this.amountSockets() >= MAX_PLAYERS;
 };
 
@@ -91,7 +88,7 @@ Room.prototype.randomCard = function () {
     //    return card;
     var card = this.deck[this.deckIndex++];
     if (this.deckIndex >= this.deck.length) {
-        shuffleArray(this.deck);
+        this.deck = shuffleArray(this.deck);
         this.deckIndex = 0;
     }
     return card;
@@ -300,8 +297,9 @@ Room.prototype.startGame = function () {
         }
         player.pile = [];
 //        player.pile.owner = player.id;
-        sockets[playerId].emit('initialCards', cards);
+        sockets[playerId].emit('initialCards', player.cards);
     }
+     this.turnHolder = this.playerData[this.playerOrder[this.turnIndex]];
 };
 
 Room.prototype.isTurnHolder = function (socket) {
