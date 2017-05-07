@@ -75,10 +75,13 @@ Room.prototype.playerInfo = function (player) {
 };
 
 Room.prototype.isJoinable = function () {
-    return !this.isFull() && !rooms[roomId].playing;
+    console.log(this.amountSockets());
+
+    return !this.isFull() && !this.playing;
 };
 
 Room.prototype.isFull = function () {
+    console.log(this.amountSockets());
     return this.amountSockets() >= MAX_PLAYERS;
 };
 

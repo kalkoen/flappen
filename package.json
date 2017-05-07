@@ -1,12 +1,12 @@
 {
   "name": "flappen",
   "version": "0.0.1",
-  "description": "An original card graphics made into an online multiplayer graphics.",
+  "description": "An original card game made into an online multiplayer graphics.",
   "dependencies": {
     "dragula": "^3.7.2",
     "express": "^4.15.2",
     "knuth-shuffle": "^1.0.1",
-    "node-graphicsloop": "^0.1.4",
+    "node-gameloop": "^0.1.4",
     "pixi.js": "^4.5.1",
     "sillyname": "^0.1.0",
     "socket.io": "^1.7.3"

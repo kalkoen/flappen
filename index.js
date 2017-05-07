@@ -96,6 +96,7 @@ function findPlayableRoom(roomId) {
         var room = rooms[roomId];
         if (room) {
             if(room.isJoinable()) {
+                console.log('test');
                 return room;
             } else {
                 return createNewRoom();
