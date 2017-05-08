@@ -164,7 +164,7 @@ function initializePiles() {
     }
 
     var baseY = PILES_BASE_Y - PILES_PIVOT_Y;
-    var baseX = CENTER_X;
+    var baseX = centerX;
 
     var playerId;
     var i;
@@ -194,16 +194,13 @@ function initializePiles() {
                 pile: pile,
                 owner: player.id
             };
-
-            if (j < 5 && i < 3) {
-                createPileCard(2, pile[j]);
-            }
         }
     }
 }
 
+
 function buildGame() {
-    CENTER_X = 600;
+    //CENTER_X = 600;
     buildDeck();
     buildBaseCard();
 }
@@ -223,7 +220,7 @@ function buildLobby() {
 }
 
 function buildWindow() {
-    graphics = new Phaser.Game(PLAYER_LIST_WIDTH + 800, 800, Phaser.AUTO, 'canvas', {
+    graphics = new Phaser.Game(PLAYER_LIST_WIDTH + 800, 800, Phaser.CANVAS, 'canvas', {
         preload: preload,
         create: create,
         update: update

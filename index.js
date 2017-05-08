@@ -96,6 +96,7 @@ function findPlayableRoom(roomId) {
         var room = rooms[roomId];
         if (room) {
             if(room.isJoinable()) {
+
                 return room;
             } else {
                 return createNewRoom();
@@ -182,7 +183,7 @@ const loop = gameloop.setGameLoop(function (delta) {
     }
 }, 1000);
 
-http.listen(3000, function () {
+http.listen(process.env.PORT || 3000, function () {
     console.log("listening on *:3000");
 });
 
