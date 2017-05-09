@@ -1,92 +1,217 @@
+var ROOM_STATE = {
+    LOBBY: 0,
+    START_DELAY: 1,
+    PLAYING: 2,
+    END_DELAY: 3
+};
+
+
 var socket = io();
 
-var login = document.getElementById("login");
+var intro = document.getElementById("intro");
 var playerNameBox = document.getElementById("name");
-var container = document.getElementById("container");
-//var graphics = document.getElementById("graphics");
-var chat = document.getElementById("chat");
+var game = document.getElementById("game");
+var clock = document.getElementById("clockValue");
+var messages = document.getElementById("messages");
+var chatBox = document.getElementById("chatBox");
 var canvas = document.getElementById("canvas");
+var playerList = document.getElementById("playerList");
 
+var mainTimer;
 var room = {};
-
 var graphics;
 
-socket.on('playerJoin', function (players) {
+socket.on('playerJoin', playerJoin);
+socket.on('playerLeave', playerLeave);
+socket.on('playerReadyForStart', playerReadyForStart);
+socket.on('roomJoin', roomJoin);
+socket.on('startGame', startGame);
+socket.on('initialCards', initialCards);
+socket.on('changeTurn', changeTurn);
+socket.on('dealCards', dealCards);
+socket.on('placeCardRejected', placeCardRejected);
+socket.on('placeCard', placeCard);
+socket.on('endGame', endGame);
+
+socket.on('playerLose', playerLose);
+socket.on('playerWin', playerWin);
+socket.on('playerDeath', playerDeath);
+
+socket.on('chatMessage', chatMessage);
+
+socket.on('disconnect', disconnect);
+
+function playerJoin(players) {
     var i;
     for (i = 0; i < players.length; i++) {
         var player = players[i];
         room.playerInfo[player.id] = player;
-        createPlayerInList(player, amountPlayers() - 1);
+        addPlayerToList(player);
+        room.amountPlayers++;
         console.log(player.playerName + ' joined, ' + amountPlayers() + ' players.');
     }
-});
+}
 
-socket.on('playerLeave', function (players) {
+function playerLeave(playerIds) {
     var i;
-    for (i = 0; i < players.length; i++) {
-        var playerId = players[i];
+    for (i = 0; i < playerIds.length; i++) {
+        var playerId = playerIds[i];
         var player = room.playerInfo[playerId];
-        removePlayerInList(player);
+        removePlayerFromList(player);
         delete room.playerInfo[playerId];
-        reorderPlayersInList();
+        room.amountPlayers--;
         console.log(player.playerName + ' left, ' + amountPlayers() + ' players.');
     }
-});
+}
 
-socket.on('roomJoin', function (roomData) {
+function playerReadyForStart(playerId) {
+    var player = room.playerInfo[playerId];
+    if (player.listItem) {
+        player.listItem.classList.add("ready");
+    }
+}
+
+function roomJoin(roomData) {
     room = roomData;
-    console.log(room.playerInfo);
     var mappedPlayerInfo = {};
     var i;
     for (i = 0; i < room.playerInfo.length; i++) {
         var player = room.playerInfo[i];
         mappedPlayerInfo[player.id] = player;
+
+        addPlayerToList(player);
     }
     room.playerInfo = mappedPlayerInfo;
-
     room.playing = false;
+    room.amountPlayers = amountPlayers();
+    room.state = ROOM_STATE.LOBBY;
+
+    startClock();
 
     location.hash = "#" + room.id;
 
-    buildLobby();
-});
+    intro.style.display = "none";
+    game.style.visibility = "visible";
+}
 
+function endGame(data) {
+    resetRoom();
+    resetGameGraphics();
+    room.state = ROOM_STATE.END_DELAY;
+    room.count = data.count;
+}
 
-socket.on('startGame', function (data) {
-    room.playerOrder = data.playerOrder;
-    room.baseCard = data.baseCard;
-    room.cardsPerPlayer = data.cardsPerPlayer;
-    room.pileSize = data.pileSize;
+function resetRoom() {
+    room = {};
+}
 
+function roomLeave() {
+    resetRoom();
+    resetGameGraphics();
+    clearChat();
+
+    stopClock();
+
+    intro.style.display = "block";
+    game.style.visibility = "hidden";
+}
+
+function startGame(data) {
+    var key;
+    for (key in data) {
+        room[key] = data[key];
+    }
     room.amountPlayers = amountPlayers();
+    room.state = ROOM_STATE.START_DELAY;
+
+    reorderPlayersInList();
 
     buildGame();
     initializePiles();
-});
+}
 
-socket.on('initialCards', function (cards) {
+function initialCards(cards) {
     room.cards = cards;
-    initialCards(cards);
-});
+    initialCardSprites(cards);
+}
 
-socket.on("placeCardRejected", function (data) {
-    removePileTopCard(playerInfo[data.pileOwnerId]);
-});
+function dealCards(cards) {
+    dealCardSprites(cards);
+}
 
-socket.on("placeCard", function (data) {
-    var pileOwner = this.playerInfo[data.pileOwnerId];
+function placeCardRejected(data) {
+    var pile = room.playerInfo[data.pileOwnerId].pile;
+    var pileLayer = pile[pile.size - 1];
+    dealCards([data.card])
+    removeCardSprite(pileLayer);
+}
+
+function placeCard(data) {
+    console.log(data);
+    var pileOwner = room.playerInfo[data.pileOwnerId];
     var pile = pileOwner.pile;
     if (pile.size >= room.pileSize) {
         return;
     }
-    var pileLayer = pile[pile.size - 1];
-    if (pileLayer.card === data.card && pileLayer.sprite) {
-        if (pileLayer.sprite === graphics.unverifiedPileCard) {
-            delete graphics.unverifiedPileCard;
-        }
+    var pileLayer = pile[pile.size];
+    createPileCard(data.card, pileLayer);
+}
+
+
+function playerDeath(playerId) {
+    var player = room.playerInfo[playerId];
+    player.listItem.classList.add("dead");
+
+}
+
+function playerLose(playerId) {
+    var player = room.playerInfo[playerId];
+    player.listItem.classList.add("loser");
+    player.listItem.style = "";
+
+}
+
+function playerWin(playerId) {
+    var player = room.playerInfo[playerId];
+    player.listItem.classList.add("winner");
+    player.listItem.style = "";
+}
+
+function drawCard() {
+    if (!isTurnHolder()) {
         return;
     }
-    createPileCard(data.card, pileLayer);
+    socket.emit("drawCard");
+}
+
+function chatMessage(data) {
+    if (!room) {
+        return;
+    }
+    var playerName = room.playerInfo[data.sender].playerName;
+    displayChatMessage(playerName + ": " + data.message);
+}
+
+function disconnect() {
+    roomLeave();
+}
+
+function isTurnHolder() {
+    if(!room.turnHolder) {
+        return false;
+    }
+    return room.turnHolder.id === socket.id;
+}
+
+
+chatBox.addEventListener("keydown", function (event) {
+    if (!room) {
+        return;
+    }
+    if ((event.keyCode || event.which) == 13) {
+        socket.emit("chatMessage", chatBox.value);
+        chatBox.value = "";
+    }
 });
 
 function amountPlayers() {
@@ -111,15 +236,116 @@ function requestRoom() {
     });
 }
 
-function placeCard(card, pileOwnerId) {
+function requestPlaceCard(card, pileOwnerId) {
+    if (!isTurnHolder()) {
+        return;
+    }
     socket.emit("placeCard", {
         card: card,
         pileOwnerId: pileOwnerId
     });
 }
 
+function displayChatMessage(message) {
+    var entry = document.createElement('li');
+    entry.appendChild(document.createTextNode(message));
+    messages.append(entry);
+}
+
+
+function changeTurn(data) {
+    if (room.turnHolder) {
+        resetPlayerTurnHolderStatus(room.turnHolder);
+    }
+    room.turnHolder = room.playerInfo[data.turnHolderId];
+    setPlayerAsTurnHolder(room.turnHolder);
+
+    room.state = ROOM_STATE.PLAYING;
+    room.count = data.count;
+}
+
+function setPlayerAsTurnHolder(player) {
+    player.listItem.classList.add("turnHolder");
+}
+
+function resetPlayerTurnHolderStatus(player) {
+    player.listItem.classList.remove("turnHolder");
+}
+
+function addPlayerToList(player) {
+    var listItem = document.createElement('div');
+    listItem.className = "player";
+    listItem.id = "player:" + player.id;
+    var playerIconDiv = document.createElement('div');
+    playerIconDiv.className = "playerIcon";
+    var playerNameDiv = document.createElement('div');
+    playerNameDiv.className = "playerName";
+    playerNameDiv.innerHTML = player.playerName;
+
+
+    if (player.id === socket.id) {
+        listItem.classList.add("me");
+    }
+
+    if (player.readyForStart) {
+        listItem.classList.add("ready");
+    }
+
+    listItem.appendChild(playerIconDiv);
+    listItem.appendChild(playerNameDiv);
+    playerList.appendChild(listItem);
+
+    player.listItem = listItem;
+}
+
+function removePlayerFromList(player) {
+    if (!player.listItem) {
+        return;
+    }
+    playerList.removeChild(player.listItem);
+}
+
+function reorderPlayersInList() {
+    if (!room.playerOrder) {
+        return;
+    }
+    var i;
+    for (i = 0; i < room.playerOrder.length; i++) {
+        var player = room.playerInfo[room.playerOrder[i]];
+        if (!player.listItem) {
+            return;
+        }
+        player.listItem.style.order = i;
+    }
+}
+
+
+function startClock() {
+    mainTimer = setTimeout(timer, 1000);
+    if (room && room.count) {
+        setClockValue(room.count);
+    }
+}
+
+function stopClock() {
+    setClockValue("");
+}
+
+function timer() {
+    if (!room || room.count < 0) {
+        return;
+    }
+    if ((room.state !== ROOM_STATE.LOBBY || room.amountPlayers >= room.minPlayers) && --room.count >= 0) {
+        setClockValue(room.count);
+    }
+    setTimeout(timer, 1000);
+}
+
+function setClockValue(time) {
+    clock.innerHTML = time;
+}
+
 window.onload = buildWindow;
-window.onresize = function () {};
 
 const CARD_IMG_WIDTH = 221;
 const CARD_IMG_HEIGHT = 300;
@@ -137,22 +363,12 @@ const HAND_CARD_SCALE = 1.5;
 const HAND_CARDS_X_DISTANCE = 95 * HAND_CARD_SCALE;
 const HAND_CARDS_Y = 775;
 const HAND_CARD_SNAP_DISTANCE_SQR = 50 * 50;
-
-const PLAYER_LIST_WIDTH = 200;
-
-//const PLAYER_LIST_MARGIN_X = 10;
-const TITLE_MARGIN_Y = 50;
-const PLAYER_LIST_MARGIN_Y = 120;
-const PLAYER_LIST_SPACING = 50;
-
-const CENTER_X = 600;
+const CENTER_X = 400;
 
 var cardSheet;
 
 var deckSprite, baseCardSprite;
 var handCardSprites;
-
-var playerList;
 
 function initializePiles() {
     var maxAngle = MAX_ANGLE * room.amountPlayers / MAX_PLAYERS;
@@ -170,7 +386,6 @@ function initializePiles() {
     var i;
     for (i = 0; i < room.playerOrder.length; i++) {
         var player = room.playerInfo[room.playerOrder[i]];
-        // TODO CHANGE
         var pile = [];
         pile.size = 0;
         pile.group = graphics.add.group();
@@ -194,104 +409,37 @@ function initializePiles() {
                 pile: pile,
                 owner: player.id
             };
-
-            if (j < 5 && i < 3) {
-                createPileCard(2, pile[j]);
-            }
         }
     }
 }
 
-function buildGame() {
-    CENTER_X = 600;
-    buildDeck();
-    buildBaseCard();
-}
+//function buildPlayerList() {
+//    var renderer = graphics.add.graphics(0, 0);
+//    renderer.beginFill(0xE5E5E5);
+//    renderer.drawRect(0, 0, 200, 800);
+//    renderer.endFill();
+//    var title = graphics.add.text(PLAYER_LIST_WIDTH / 2, TITLE_MARGIN_Y, "flappen");
+//    title.anchor.set(0.5, 0.5);
+//    title.fontSize = 40;
+//    playerList = {
+//        renderer: renderer,
+//        title: title
+//    };
+//    var playerId, i = 0;
+//    console.log(room.playerInfo);
+//    for (playerId in room.playerInfo) {
+//        createPlayerInList(room.playerInfo[playerId], i);
+//        i++;
+//    }
+//}
 
-function buildDeck() {
-    deckSprite = createCardSprite(BACK_CARD_ID, CENTER_X + DECK_X_OFFSET, BASE_AND_DECK_Y, 1);
-}
-
-function buildBaseCard() {
-    baseCardSprite = createCardSprite(room.baseCard, CENTER_X, BASE_AND_DECK_Y, 1);
-}
-
-function buildLobby() {
-    login.style.visibility = "hidden";
-    container.style.visibility = "visible";
-    buildPlayerList();
-}
-
-function buildWindow() {
-    graphics = new Phaser.Game(PLAYER_LIST_WIDTH + 800, 800, Phaser.AUTO, 'canvas', {
-        preload: preload,
-        create: create,
-        update: update
-        /*, render: render*/
-    });
-}
-
-function buildPlayerList() {
-    var renderer = graphics.add.graphics(0, 0);
-    renderer.beginFill(0xE5E5E5);
-    renderer.drawRect(0, 0, 200, 800);
-    renderer.endFill();
-    var title = graphics.add.text(PLAYER_LIST_WIDTH / 2, TITLE_MARGIN_Y, "flappen");
-    title.anchor.set(0.5, 0.5);
-    title.fontSize = 40;
-    playerList = {
-        renderer: renderer,
-        title: title
-    };
-    var playerId, i = 0;
-    console.log(room.playerInfo);
-    for (playerId in room.playerInfo) {
-        createPlayerInList(room.playerInfo[playerId], i);
-        i++;
-    }
-}
-
-function createPlayerInList(player, index) {
-    player.title = graphics.add.text(PLAYER_LIST_WIDTH / 2, PLAYER_LIST_MARGIN_Y + PLAYER_LIST_SPACING * index, player.playerName);
-    player.title.anchor.set(0.5, 0.5);
-    player.title.fontWeight = player.id === socket.id ? 'bold' : 'normal';
-    player.index = index;
-}
-
-function positionPlayerInList(player, index) {
-    player.title.x = PLAYER_LIST_WIDTH / 2;
-    player.title.y = PLAYER_LIST_MARGIN_Y + PLAYER_LIST_SPACING * index;
-    player.index = index;
-}
-
-function removePlayerInList(player, index) {
-    player.title.destroy();
-}
-
-function reorderPlayersInList() {
-    if (room.playerOrder) {
-        var i;
-        for (i = 0; i < room.playerOrder.length; i++) {
-            var player = room.playerInfo[room.playerOrder[i]];
-            positionPlayerInList(player, i);
-        }
-    } else {
-        var playerId, i = 0;
-        for (playerId in room.playerInfo) {
-            var player = room.playerInfo[playerId];
-            positionPlayerInList(player, i);
-            i++;
-        }
-    }
-}
-
-function initialCards(cards) {
+function initialCardSprites(cards) {
     handCardSprites = [];
-    cardsDealt(cards);
+    dealCards(cards);
 }
 
 // leaving cards to null repositions the cards
-function cardsDealt(cards) {
+function dealCardSprites(cards) {
     var cardsLength = cards ? cards.length : 0;
     var newAmountCards = handCardSprites.length + cardsLength;
     if (newAmountCards === 0) {
@@ -342,11 +490,36 @@ function preload() {
     graphics.load.script('webfont', '//ajax.googleapis.com/ajax/libs/webfont/1.4.7/webfont.js');
 }
 
+function buildGame() {
+    buildDeck();
+    buildBaseCard();
+}
+
+function buildDeck() {
+    deckSprite = createCardSprite(BACK_CARD_ID, CENTER_X + DECK_X_OFFSET, BASE_AND_DECK_Y, 1);
+    deckSprite.inputEnabled = true;
+    deckSprite.events.onInputDown.add(drawCard);
+}
+
+function buildBaseCard() {
+    baseCardSprite = createCardSprite(room.baseCard, CENTER_X, BASE_AND_DECK_Y, 1);
+}
+
+function buildWindow() {
+    // TODO change spritesheet so render mode doesn't have to be CANVAS to work properly on all computers
+    graphics = new Phaser.Game(canvas.clientWidth, canvas.clientHeight, Phaser.CANVAS, 'canvas', {
+        preload: preload,
+        create: create,
+        update: update
+        /*, render: render*/
+    });
+}
+
 function create() {
     graphics.stage.backgroundColor = "#F2F2F2";
     graphics.scale.setShowAll();
     graphics.scale.scaleMode = Phaser.ScaleManager.SHOW_ALL;
-    graphics.scale.scaleMode = Phaser.ScaleManager.SHOW_ALL;
+    graphics.scale.setGameSize(800, 800);
 }
 
 
@@ -375,12 +548,13 @@ function createPileCard(card, pileLayer) {
     return sprite;
 }
 
-function removePileTopCard(pileLayer) {
+function removeCardSprite(pileLayer) {
     pileLayer.pile.size--;
     if (pileLayer.sprite) {
-        pileLayer.pile.group.remove(pileLayer.sprite);
+        //        pileLayer.pile.group.remove(pileLayer.sprite);
+        pileLayer.sprite.destroy();
     }
-    delete pileLayer.sprite;
+    delete pileLayer.card;
     delete pileLayer.sprite;
 }
 
@@ -469,25 +643,38 @@ function stopDragging(sprite, pointer) {
         return;
     }
     if (graphics.drag.pileLayer) {
-        placeCard(sprite.frame, graphics.drag.pileLayer.owner);
+        requestPlaceCard(sprite.frame, graphics.drag.pileLayer.owner);
         removeHandCard(sprite);
-        cardsDealt();
+        dealCardSprites();
     } else {
         positionAsHandCard(sprite, graphics.drag.startPosition.x, graphics.drag.startPosition.y);
     }
     delete graphics.drag;
 }
 
-function spriteScale(scale) {
-    return scale * 0.4;
+function clearChat() {
+    while (chatBox.firstChild) {
+        chatBox.removeChild(chatBox.firstChild);
+    }
 }
 
-Math.radians = function (degrees) {
-    return degrees * Math.PI / 180;
-};
+function resetGameGraphics() {
+    resetPlayerList();
+    resetWorld();
+}
 
-Math.distanceSqr = function (x1, y1, x2, y2) {
-    return Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2);
+function resetPlayerList() {
+    while (playerList.firstChild) {
+        playerList.removeChild(playerList.firstChild);
+    }
+}
+
+function resetWorld() {
+    graphics.world.removeAll();
+}
+
+function spriteScale(scale) {
+    return scale * 0.4;
 }
 
 function cardsMatch(card1, card2) {
@@ -496,6 +683,14 @@ function cardsMatch(card1, card2) {
     }
     var card1mod = card1 % 4;
     var card2mod = card2 % 4;
-    // cards of the same symbol or same number or one is joker
+    // cards of the same symbol or same number or
     return card1mod === card2mod || Math.floor(card1 / 4) === Math.floor(card2 / 4) || card1 >= 52 || card2 >= 52;
+};
+
+Math.radians = function (degrees) {
+    return degrees * Math.PI / 180;
+};
+
+Math.distanceSqr = function (x1, y1, x2, y2) {
+    return Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2);
 }

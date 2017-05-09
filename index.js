@@ -1,6 +1,7 @@
 const gameloop = require('node-gameloop');
 const generateName = require('sillyname');
-const shuffleArray = require("knuth-shuffle").knuthShuffle;
+global.shuffleArray = require("knuth-shuffle").knuthShuffle;
+global.sanitizeHtml = require('sanitize-html');
 
 var express = require('express');
 var app = express();
@@ -17,9 +18,10 @@ var rooms = {};
 
 global.MIN_PLAYERS = 3;
 global.MAX_PLAYERS = 6;
-global.GAME_COUNTDOWN = 30;
+global.GAME_COUNTDOWN = 20;
 global.FIRST_TURN_COUNTDOWN = 5;
-global.TURN_DURATION = 30;
+global.TURN_DURATION = 20;
+global.END_GAME_COUNTDOWN = 5;
 global.ROOM_NAME_LENGTH = 5;
 global.START_CARDS_PER_PLAYER = 3;
 global.MAX_CARDS_PER_PLAYER = 4;
@@ -30,7 +32,7 @@ io.on('connection', function (socket) {
     console.log('client with id ' + socket.id + ' connected from ' + socket.conn.remoteAddress);
 
     socket.on('requestRoom', function (data) {
-        if(socket.room) {
+        if (socket.room) {
             return;
         }
         console.log(socket.conn.remoteAddress + " requests room '" + data.roomId + "' and player name '" + data.playerName + "'");
@@ -41,20 +43,26 @@ io.on('connection', function (socket) {
         room.joinPlayer(socket, data.playerName);
     });
 
-    socket.on("drawCard", function() {
-        if(socket.room && socket.room.isTurnHolder(socket)) {
+    socket.on("drawCard", function () {
+        if (socket.room && socket.room.isTurnHolder(socket)) {
             socket.room.drawCard();
         }
     });
 
-    socket.on("placeCard", function(data) {
-        if(socket.room && socket.room.isTurnHolder(socket) && data.card && data.pileOwnerId) {
-            socket.room.placeCard(data.card, data.pileOwnerId);
+    socket.on("placeCard", function (data) {
+        // No turnholder check as we need rejectPlaceCard
+        if (socket.room && data.card && data.pileOwnerId) {
+            console.log(socket.room.isTurnHolder(socket));
+            if(socket.room.isTurnHolder(socket)) {
+                socket.room.placeCard(data.card, data.pileOwnerId);
+            } else {
+                socket.room.placeCardRejected(socket, data.card, data.pileOwnerId);
+            }
         }
     });
 
-    socket.on("endTurn", function() {
-        if(socket.room && socket.room.isTurnHolder(socket)) {
+    socket.on("endTurn", function () {
+        if (socket.room && socket.room.isTurnHolder(socket)) {
             socket.room.endTurn();
         }
     });
@@ -65,6 +73,12 @@ io.on('connection', function (socket) {
         }
     });
 
+    socket.on('chatMessage', function (message) {
+        if (socket.room) {
+            socket.room.sendChatMessage(socket, message);
+        }
+    })
+
     socket.on('disconnect', function () {
         console.log("client with id " + socket.id + " disconnected");
         if (socket.room) {
@@ -73,21 +87,20 @@ io.on('connection', function (socket) {
     });
 });
 
-function resetRoom(roomId) {
+global.resetRoom = function(roomId) {
     var room = rooms[roomId];
-    var newRoom = new Room(roomId)
+    var newRoom = new Room(roomId);
     rooms[roomId] = newRoom;
 
     if (room) {
-        room.emit("endGame", room.rankList());
         var playerId;
-        for(playerId in room.playerData) {
+        var sockets = room.sockets();
+        for (playerId in sockets) {
+            var player = room.playerData[playerId];
             var socket = io.sockets.sockets[playerId];
-            newRoom.createPlayerData(socket, room.playerData[playerId].playerName);
-            socket.room = newRoom;
+            newRoom.updatePlayerInformation(socket, player.playerName);
         }
     }
-    delete room;
 }
 
 function findPlayableRoom(roomId) {
@@ -95,7 +108,7 @@ function findPlayableRoom(roomId) {
         roomId = roomId.substring(0, ROOM_NAME_LENGTH);
         var room = rooms[roomId];
         if (room) {
-            if(room.isJoinable()) {
+            if (room.isJoinable()) {
                 return room;
             } else {
                 return createNewRoom();
@@ -107,13 +120,13 @@ function findPlayableRoom(roomId) {
         var roomId, bestRoom;
         for (roomId in rooms) {
             var room = rooms[roomId];
-            if(room.playing) {
+            if (room.state !== ROOM_STATE.LOBBY) {
                 continue;
             }
-            if (room.amountSockets().length == MAX_PLAYERS - 1) {
+            if (room.amountPlayers === MAX_PLAYERS - 1) {
                 return room;
             }
-            if (!bestRoom || (room.amountPlayers().length > bestRoom.amountPlayers() && room.players().length < MAX_PLAYERS)) {
+            if (!bestRoom || (room.amountPlayers > bestRoom.amountPlayers && room.amountPlayers < MAX_PLAYERS)) {
                 bestRoom = room;
             }
         }
@@ -122,7 +135,7 @@ function findPlayableRoom(roomId) {
 }
 
 function createNewRoom(roomId) {
-    if(amountRooms() >= MAX_ROOMS) {
+    if (amountRooms() >= MAX_ROOMS) {
         return;
     }
     if (!roomId) {
@@ -135,15 +148,20 @@ function createNewRoom(roomId) {
     return room;
 }
 
-global.amountRooms = function() {
-    var i = 0, roomId;
-    for(roomId in rooms) {
+global.removeRoom = function(roomId) {
+    delete rooms[roomId];
+}
+
+global.amountRooms = function () {
+    var i = 0,
+        roomId;
+    for (roomId in rooms) {
         i++;
     }
     return i;
 }
 
-global.randomDeck = function() {
+global.randomDeck = function () {
     var cards = [];
     var i;
     for (i = 0; i < 54; i++) {
@@ -153,6 +171,29 @@ global.randomDeck = function() {
     return cards;
 }
 
+const loop = gameloop.setGameLoop(function (delta) {
+    var roomId;
+    for (roomId in rooms) {
+        var room = rooms[roomId];
+        if((room.state !== ROOM_STATE.LOBBY || room.amountPlayers >= MIN_PLAYERS) && --room.count > 0) {
+            continue;
+        }
+
+        if (room.state === ROOM_STATE.LOBBY && room.amountPlayers >= MIN_PLAYERS) {
+            room.startGame();
+        } else if (room.state === ROOM_STATE.START_DELAY) {
+            room.nextTurn();
+            room.state = ROOM_STATE.PLAYING;
+        } else if(room.state === ROOM_STATE.PLAYING) {
+            room.endTurn();
+        } else if(room.state === ROOM_STATE.END_DELAY) {
+            room.endRoom();
+        }
+
+        // TODO end game
+    }
+}, 1000);
+
 global.cardsMatch = function(card1, card2) {
     if (card1 > 53 || card2 > 53) {
         return false;
@@ -161,26 +202,12 @@ global.cardsMatch = function(card1, card2) {
     var card2mod = card2 % 4;
     // cards of the same symbol or same number or
     return card1mod === card2mod || Math.floor(card1 / 4) === Math.floor(card2 / 4) || card1 >= 52 || card2 >= 52;
-}
+};
 
 global.isCardBlack = function(card) {
-    var type = card % 13;
+    var type = card % 4;
     return type >= 2;
-}
-
-const loop = gameloop.setGameLoop(function (delta) {
-    var roomId;
-    for (roomId in rooms) {
-        var room = rooms[roomId];
-        if (!room.playing) {
-            if (room.amountSockets() > MIN_PLAYERS && --room.count <= 0) {
-                room.startGame();
-            }
-        } else if (--room.count <= 0) {
-            room.nextTurn();
-        }
-    }
-}, 1000);
+};
 
 http.listen(3000, function () {
     console.log("listening on *:3000");

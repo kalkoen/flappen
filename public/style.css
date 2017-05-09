@@ -7,19 +7,28 @@ body {
 }
 
 #container {
+    display: block;
+    position: relative;
+    margin: 0 auto;
+    width: 100vh;
+    height: 100vh;
+    max-width: 800px;
+    max-height: 800px;
+}
+
+#intro {
     position: absolute;
     width: 100%;
-    height: 100%;
-    visibility: hidden
+    z-index: 1000;
 }
 
 #login {
     display: block;
-    margin: 0 auto;
+    position: relative;
     padding: 80px 50px;
-    max-width: 300px;
     text-align: center;
-    visibility: visible;
+    margin: 0 auto;
+    max-width: 300px;
 }
 
 #login>* {
@@ -30,45 +39,165 @@ body {
 }
 
 #game {
-    width: auto;
-    height: auto;
-    margin: 0 auto;
-    text-align: center;
-}
-
-#playerBox {
-    display: inline-block;
-    vertical-align: top;
-    width: 15%;
-    min-width: 175px;
-    max-width: 300px;
+    display: block;
+    /*
+    width: 100vh;
     height: 100vh;
+    max-width: 800px;
     max-height: 800px;
-    background: blue;
+*/
+    visibility: hidden;
 }
 
-#player {
-    vertical-align: top;
+#clock {
+    display: inline-block;
+    vertical-align: middle;
+    position: absolute;
+    right: -30px;
+    top: 10px;
+    width: 60px;
+    height: 60px;
+    border: 5px solid red;
+    border-radius: 40px;
+    box-shadow: 0 0 1px 0px red inset, 0 0 1px 0px red;
+    background: white;
+    z-index: 100;
+    text-align: center;
+    font-size: 30px;
+    font-family: Oswald;
+    font-weight: bold;
+}
+
+#clockValue {
+    display: table-cell;
+    width: 60px;
+    height: 60px;
+    margin: 0;
+    text-align: center;
+    vertical-align: middle;
 }
 
 #canvas {
-    display: inline-block;
-    /*    background: red;*/
-    width: 125vh;
-    height: 100vh;
-    max-width: 1000px;
-    max-height: 800px;
-    margin: 0px;
+    display: block;
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    margin: 0 auto;
     padding: 0px;
+    background: #F2F2F2;
+}
+
+#playerList {
+    display: -webkit-flex;
+    /* Safari */
+    display: flex;
+    flex-direction: column;
+    position: absolute;
+    top: 80px;
+    left: -150px;
+    width: 145px;
+    padding: 0px;
+    height: calc(100% - 90px);
+    border-style: solid;
+    border-color: #F2F2F2;
+    border-radius: 5px 0 0 5px;
+    border-width: 5px 0 5px 5px;
+    background: #F2F2F2;
+}
+
+.player {
+    display: block;
+    padding: 10px 10px 0 10px;
+    font-size: 20px;
+    font-family: Oswald;
+}
+
+.me .playerName {
+    font-weight: bold;
+}
+
+.playerName {
+    display: inline-block;
+    padding-left: 5px;
+    vertical-align: top;
+    width: 100px;
+    max-width: 120px;
+    margin: 0;
+    text-align: left;
+    text-transform: lowercase;
+    font-weight: normal;
+}
+
+.playerIcon {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    margin: 5px 0;
+    border-radius: 4px;
+    background: red;
+}
+
+.ready .playerIcon {
+    background: limegreen;
+}
+
+.dead .player {
+    opacity: 0.3;
+    filter: alpha(opacity=30);
+}
+
+.winner .playerIcon {
+    background: gold;
+}
+
+.loser .playerIcon {
+    background: brown;
+}
+
+.turnHolder {
+    padding-left: 25px;
+}
+
+.turnHolder .playerIcon {
+    width: 5px;
 }
 
 #chat {
-    display: inline-block;
-    vertical-align: top;
-    width: 15%;
-    min-width: 175px;
-    max-width: 300px;
-    height: 100vh;
-    max-height: 800px;
-    background: blue;
+    position: absolute;
+    top: 80px;
+    right: -150px;
+    width: 145px;
+    padding: 0px;
+    height: calc(100% - 90px);
+    border-style: solid;
+    border-color: #F2F2F2;
+    border-radius: 0 5px 5px 0;
+    border-width: 5px 5px 5px 0;
+    background: #F2F2F2;
+}
+
+#messages {
+    height: calc(100% - 47px);
+    list-style-type: none;
+    padding: 10px;
+    margin: 0;
+    overflow-y: scroll;
+    overflow-y: -moz-scrollbars-none;
+}
+
+#messages::-webkit-scrollbar {
+    display: none;
+}
+
+#messages li {
+    padding: 5px 0 0 0;
+}
+
+#chatBox {
+    margin: 3px;
+    padding: 5px;
+    width: 135px;
+    height: 17px;
+    border-radius: 0 5px 5px 0;
+    margin: 0;
 }
