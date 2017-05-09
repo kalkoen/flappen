@@ -1,2 +1,2 @@
 # flappen
-An original card game made into an online multiplayer game.
+An original card graphics made into an online multiplayer graphics.

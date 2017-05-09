@@ -1,7 +1,7 @@
 {
   "name": "flappen",
   "version": "0.0.1",
-  "description": "An original card game made into an online multiplayer game.",
+  "description": "An original card graphics made into an online multiplayer game.",
   "dependencies": {
     "dragula": "^3.7.2",
     "express": "^4.15.2",
